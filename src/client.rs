@@ -1,4 +1,5 @@
 use reqwest;
+use crate::types::Servers;
 
 /// Conoha API を利用するための Token request
 pub struct APITokenRequest {
@@ -89,7 +90,19 @@ impl APIClient {
                 None
             }
         }
+    }
 
-
+    /// サーバー一覧をJSON文字列として取得する
+    pub fn servers(&self, tenant_id: String) -> Option<Servers> {
+        let text = self.servers_text(tenant_id);
+        match text {
+            None => {
+                None
+            }
+            Some(json) => {
+                let servers: Servers = serde_json::from_str(&json).unwrap();
+                Some(servers)
+            }
+        }
     }
 }
