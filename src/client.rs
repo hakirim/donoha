@@ -1,4 +1,5 @@
 use reqwest;
+use reqwest::blocking::RequestBuilder;
 use crate::types::Servers;
 
 /// Conoha API を利用するための Token request
@@ -18,24 +19,25 @@ impl APITokenRequest {
     }
 
     pub fn send(&self, password: String) -> Result<APIToken, reqwest::Error> {
+        let token_position = 15;
         let send_result = self.client
             .post(self.url())
             .header(reqwest::header::ACCEPT, "application/json")
             .body(self.params(password))
             .send();
-        match send_result {
+        return match send_result {
             Err(e) => {
-                return Err(e);
+                Err(e)
             }
             Ok(r) => {
                 match r.text() {
                     Err(e) => {
-                        return Err(e);
+                        Err(e)
                     }
                     Ok(text) => {
                         let list: Vec<&str> = text.split('"').collect();
-                        let str_token = list[15].to_string();
-                        return Ok(APIToken{ value: str_token})
+                        let str_token = list[token_position].to_string();
+                        Ok(APIToken { value: str_token })
                     }
                 }
             }
@@ -71,38 +73,23 @@ impl APIClient {
         }
     }
 
-    /// サーバー一覧をJSON文字列として取得する
-    pub fn servers_text(&self, tenant_id: String) -> Option<String> {
-        let result = self.http_client
-            .get(format!("https://compute.tyo1.conoha.io/v2/{}/servers", tenant_id))
+    fn basic_request(&self, url: String) -> RequestBuilder {
+        self.http_client
+            .get(url)
             .header(reqwest::header::ACCEPT, "application/json")
             .header("X-Auth-Token", &(self.api_token.value))
-            .send();
-        match result {
-            Ok(response) => {
-                if response.status().is_success() {
-                    Some(response.text().unwrap())
-                } else {
-                    None
-                }
-            }
-            Err(_err) => {
-                None
-            }
-        }
+    }
+
+    /// サーバー一覧をJSON文字列として取得する
+    pub fn servers_text(&self, tenant_id: String) -> Option<String> {
+        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers", tenant_id);
+        let result = self.basic_request(url).send();
+        result.unwrap().text().ok()
     }
 
     /// サーバー一覧をJSON文字列として取得する
     pub fn servers(&self, tenant_id: String) -> Option<Servers> {
         let text = self.servers_text(tenant_id);
-        match text {
-            None => {
-                None
-            }
-            Some(json) => {
-                let servers: Servers = serde_json::from_str(&json).unwrap();
-                Some(servers)
-            }
-        }
+        text.and_then(|json| Some::<Servers>(serde_json::from_str(&json).unwrap()))
     }
 }
