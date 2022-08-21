@@ -1,6 +1,6 @@
 use reqwest;
 use reqwest::blocking::RequestBuilder;
-use crate::types::Servers;
+use crate::types::{Servers, Server};
 
 /// Conoha API を利用するための Token request
 pub struct APITokenRequest {
@@ -65,6 +65,11 @@ pub struct APIClient {
     api_token: APIToken,
 }
 
+enum HTTPMethod {
+    GET,
+    POST
+}
+
 impl APIClient {
     pub fn new(api_token: APIToken) -> Self {
         APIClient {
@@ -73,17 +78,25 @@ impl APIClient {
         }
     }
 
-    fn basic_request(&self, url: String) -> RequestBuilder {
-        self.http_client
-            .get(url)
+    fn basic_request(&self, method: HTTPMethod, url: String) -> RequestBuilder {
+        let request = match method {
+            HTTPMethod::GET => {
+                self.http_client.get(url)
+            }
+            HTTPMethod::POST => {
+                self.http_client.post(url)
+            }
+        };
+        request
             .header(reqwest::header::ACCEPT, "application/json")
             .header("X-Auth-Token", &(self.api_token.value))
     }
 
     /// サーバー一覧をJSON文字列として取得する
     pub fn servers_text(&self, tenant_id: String) -> Option<String> {
-        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers", tenant_id);
-        let result = self.basic_request(url).send();
+        // doc: https://www.conoha.jp/docs/compute-get_flavors_detail.php
+        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers/detail", tenant_id);
+        let result = self.basic_request(HTTPMethod::GET, url).send();
         result.unwrap().text().ok()
     }
 
@@ -91,5 +104,24 @@ impl APIClient {
     pub fn servers(&self, tenant_id: String) -> Option<Servers> {
         let text = self.servers_text(tenant_id);
         text.and_then(|json| Some::<Servers>(serde_json::from_str(&json).unwrap()))
+    }
+
+    pub fn shutdown(&self, server: &Server) -> bool {
+        // doc: https://www.conoha.jp/docs/compute-stop_cleanly_vm.php
+        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers/{}/action", server.tenant_id, server.id);
+
+        let request = self.basic_request(HTTPMethod::POST, url);
+        let result = request
+            .body("{\"os-stop\": null}")
+            .send();
+        match result {
+            Ok(response) => {
+                response.status().is_success()
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+                false
+            }
+        }
     }
 }

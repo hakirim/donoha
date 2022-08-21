@@ -8,5 +8,6 @@ pub struct Servers {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Server {
     pub id: String,
-    pub name: String
+    pub name: String,
+    pub tenant_id: String,
 }
