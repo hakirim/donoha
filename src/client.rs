@@ -67,7 +67,8 @@ pub struct APIClient {
 
 enum HTTPMethod {
     GET,
-    POST
+    POST,
+    DELETE,
 }
 
 impl APIClient {
@@ -85,6 +86,9 @@ impl APIClient {
             }
             HTTPMethod::POST => {
                 self.http_client.post(url)
+            }
+            HTTPMethod::DELETE => {
+                self.http_client.delete(url)
             }
         };
         request
@@ -111,6 +115,25 @@ impl APIClient {
         let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers/{}/action", server.tenant_id, server.id);
 
         let request = self.basic_request(HTTPMethod::POST, url);
+        let result = request
+            .body("{\"os-stop\": null}")
+            .send();
+        match result {
+            Ok(response) => {
+                response.status().is_success()
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+                false
+            }
+        }
+    }
+
+    pub fn delete(&self, server: &Server) -> bool {
+        // doc: https://www.conoha.jp/docs/compute-delete_vm.php
+        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers/{}", server.tenant_id, server.id);
+
+        let request = self.basic_request(HTTPMethod::DELETE, url);
         let result = request
             .body("{\"os-stop\": null}")
             .send();
