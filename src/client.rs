@@ -1,6 +1,6 @@
+use crate::types::{Server, Servers};
 use reqwest;
 use reqwest::blocking::RequestBuilder;
-use crate::types::{Servers, Server};
 
 /// Conoha API を利用するための Token request
 pub struct APITokenRequest {
@@ -20,43 +20,39 @@ impl APITokenRequest {
 
     pub fn send(&self, password: String) -> Result<APIToken, reqwest::Error> {
         let token_position = 15;
-        let send_result = self.client
+        let send_result = self
+            .client
             .post(self.url())
             .header(reqwest::header::ACCEPT, "application/json")
             .body(self.params(password))
             .send();
         return match send_result {
-            Err(e) => {
-                Err(e)
-            }
-            Ok(r) => {
-                match r.text() {
-                    Err(e) => {
-                        Err(e)
-                    }
-                    Ok(text) => {
-                        let list: Vec<&str> = text.split('"').collect();
-                        let str_token = list[token_position].to_string();
-                        Ok(APIToken { value: str_token })
-                    }
+            Err(e) => Err(e),
+            Ok(r) => match r.text() {
+                Err(e) => Err(e),
+                Ok(text) => {
+                    let list: Vec<&str> = text.split('"').collect();
+                    let str_token: String = list[token_position].to_string();
+                    Ok(APIToken { value: str_token })
                 }
-            }
-        }
+            },
+        };
     }
 
-    fn url(&self) -> String {
-        String::from("https://identity.tyo1.conoha.io/v2.0/tokens")
+    fn url(&self) -> &str {
+        "https://identity.tyo1.conoha.io/v2.0/tokens"
     }
 
     fn params(&self, password: String) -> String {
-        format!("{{ \"auth\": {{ \"passwordCredentials\": {{ \"username\": \"{}\", \"password\": \"{}\" }}, \"tenantId\": \"{}\" }} }}", self.
-            user_name, password, self.tenant_id)
+        let ret = format!("{{ \"auth\": {{ \"passwordCredentials\": {{ \"username\": \"{}\", \"password\": \"{}\" }}, \"tenantId\": \"{}\" }} }}", self.
+            user_name, password, self.tenant_id);
+        String::from(ret)
     }
 }
 
 /// Conoha API を利用するための Token
 pub struct APIToken {
-    value: String
+    value: String,
 }
 
 /// Conoha API を利用するための API Client
@@ -75,53 +71,56 @@ impl APIClient {
     pub fn new(api_token: APIToken) -> Self {
         APIClient {
             http_client: reqwest::blocking::Client::new(),
-            api_token
+            api_token,
         }
     }
 
-    fn basic_request(&self, method: HTTPMethod, url: String) -> RequestBuilder {
+    fn basic_request(&self, method: HTTPMethod, url: &str) -> RequestBuilder {
         let request = match method {
-            HTTPMethod::GET => {
-                self.http_client.get(url)
-            }
-            HTTPMethod::POST => {
-                self.http_client.post(url)
-            }
-            HTTPMethod::DELETE => {
-                self.http_client.delete(url)
-            }
+            HTTPMethod::GET => self.http_client.get(url),
+            HTTPMethod::POST => self.http_client.post(url),
+            HTTPMethod::DELETE => self.http_client.delete(url),
         };
         request
             .header(reqwest::header::ACCEPT, "application/json")
-            .header("X-Auth-Token", &(self.api_token.value))
+            .header("X-Auth-Token", self.api_token.value.clone())
     }
 
     /// サーバー一覧をJSON文字列として取得する
-    pub fn servers_text(&self, tenant_id: String) -> Option<String> {
+    pub fn servers_text(&self, tenant_id: &str) -> Option<String> {
         // doc: https://www.conoha.jp/docs/compute-get_flavors_detail.php
-        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers/detail", tenant_id);
-        let result = self.basic_request(HTTPMethod::GET, url).send();
+        let tenant_id_for_url = String::from(tenant_id);
+        let result = self
+            .basic_request(
+                HTTPMethod::GET,
+                format!(
+                    "https://compute.tyo1.conoha.io/v2/{}/servers/detail",
+                    tenant_id_for_url
+                )
+                .as_str(),
+            )
+            .send();
         result.unwrap().text().ok()
     }
 
-    /// サーバー一覧をJSON文字列として取得する
-    pub fn servers(&self, tenant_id: String) -> Option<Servers> {
+    /// サーバー一覧を取得する
+    pub fn servers(&self, tenant_id: &str) -> Option<Servers> {
         let text = self.servers_text(tenant_id);
         text.and_then(|json| Some::<Servers>(serde_json::from_str(&json).unwrap()))
     }
 
     pub fn shutdown(&self, server: &Server) -> bool {
         // doc: https://www.conoha.jp/docs/compute-stop_cleanly_vm.php
-        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers/{}/action", server.tenant_id, server.id);
+        let url = format!(
+            "https://compute.tyo1.conoha.io/v2/{}/servers/{}/action",
+            server.tenant_id, server.id
+        );
+        let url = url.as_str();
 
         let request = self.basic_request(HTTPMethod::POST, url);
-        let result = request
-            .body("{\"os-stop\": null}")
-            .send();
+        let result = request.body("{\"os-stop\": null}").send();
         match result {
-            Ok(response) => {
-                response.status().is_success()
-            }
+            Ok(response) => response.status().is_success(),
             Err(e) => {
                 eprintln!("{}", e);
                 false
@@ -131,16 +130,16 @@ impl APIClient {
 
     pub fn delete(&self, server: &Server) -> bool {
         // doc: https://www.conoha.jp/docs/compute-delete_vm.php
-        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers/{}", server.tenant_id, server.id);
+        let url = format!(
+            "https://compute.tyo1.conoha.io/v2/{}/servers/{}",
+            server.tenant_id, server.id
+        );
+        let url = url.as_str();
 
         let request = self.basic_request(HTTPMethod::DELETE, url);
-        let result = request
-            .body("{\"os-stop\": null}")
-            .send();
+        let result = request.body("{\"os-stop\": null}").send();
         match result {
-            Ok(response) => {
-                response.status().is_success()
-            }
+            Ok(response) => response.status().is_success(),
             Err(e) => {
                 eprintln!("{}", e);
                 false

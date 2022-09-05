@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Servers {
-    pub servers: Vec<Server>
+    pub servers: Vec<Server>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
