@@ -52,13 +52,13 @@ impl APITokenRequest {
 
 /// Conoha API を利用するための Token
 pub struct APIToken {
-    value: String,
+    pub value: String,
 }
 
 /// Conoha API を利用するための API Client
-pub struct APIClient {
+pub struct APIClient<'a> {
     http_client: reqwest::blocking::Client,
-    api_token: APIToken,
+    api_token: &'a APIToken,
 }
 
 enum HTTPMethod {
@@ -67,8 +67,8 @@ enum HTTPMethod {
     DELETE,
 }
 
-impl APIClient {
-    pub fn new(api_token: APIToken) -> Self {
+impl<'a> APIClient<'a> {
+    pub fn new(api_token: &'a APIToken) -> Self {
         APIClient {
             http_client: reqwest::blocking::Client::new(),
             api_token,
@@ -87,7 +87,7 @@ impl APIClient {
     }
 
     /// サーバー一覧をJSON文字列として取得する
-    pub fn servers_text(&self, tenant_id: &str) -> Option<String> {
+    pub fn servers_text(&self, tenant_id: String) -> Option<String> {
         // doc: https://www.conoha.jp/docs/compute-get_flavors_detail.php
         let tenant_id_for_url = String::from(tenant_id);
         let result = self
@@ -104,7 +104,7 @@ impl APIClient {
     }
 
     /// サーバー一覧を取得する
-    pub fn servers(&self, tenant_id: &str) -> Option<Servers> {
+    pub fn servers(&self, tenant_id: String) -> Option<Servers> {
         let text = self.servers_text(tenant_id);
         text.and_then(|json| Some::<Servers>(serde_json::from_str(&json).unwrap()))
     }
