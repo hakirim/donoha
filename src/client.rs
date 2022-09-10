@@ -109,6 +109,25 @@ impl<'a> APIClient<'a> {
         text.and_then(|json| Some::<Servers>(serde_json::from_str(&json).unwrap()))
     }
 
+    pub fn boot(&self, server: &Server) -> bool {
+        // doc:  https://www.conoha.jp/docs/compute-power_on_vm.php
+        let url = format!(
+            "https://compute.tyo1.conoha.io/v2/{}/servers/{}/action",
+            server.tenant_id, server.id
+        );
+        let url = url.as_str();
+
+        let request = self.basic_request(HTTPMethod::POST, url);
+        let result = request.body("{\"os-start\": null}").send();
+        match result {
+            Ok(response) => response.status().is_success(),
+            Err(e) => {
+                eprintln!("{}", e);
+                false
+            }
+        }
+    }
+
     pub fn shutdown(&self, server: &Server) -> bool {
         // doc: https://www.conoha.jp/docs/compute-stop_cleanly_vm.php
         let url = format!(

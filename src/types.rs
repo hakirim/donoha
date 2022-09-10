@@ -10,4 +10,5 @@ pub struct Server {
     pub id: String,
     pub name: String,
     pub tenant_id: String,
+    pub status: String,
 }
