@@ -1,4 +1,4 @@
-use crate::types::{Server, Servers};
+use crate::types::{Flavor, Flavors, Image, Images, Server, Servers};
 use reqwest;
 use reqwest::blocking::RequestBuilder;
 
@@ -107,6 +107,61 @@ impl<'a> APIClient<'a> {
     pub fn servers(&self, tenant_id: String) -> Option<Servers> {
         let text = self.servers_text(tenant_id);
         text.and_then(|json| Some::<Servers>(serde_json::from_str(&json).unwrap()))
+    }
+
+    pub fn flavors(&self, tenant_id: String) -> Option<Flavors> {
+        // doc: https://www.conoha.jp/docs/compute-get_flavors_list.php
+        let tenant_id_for_url = String::from(tenant_id);
+        let text_result = self
+            .basic_request(
+                HTTPMethod::GET,
+                format!(
+                    "https://compute.tyo1.conoha.io/v2/{}/flavors",
+                    tenant_id_for_url
+                )
+                .as_str(),
+            )
+            .send();
+        let opt_string = text_result.unwrap().text().ok();
+        opt_string.and_then(|json| Some::<Flavors>(serde_json::from_str(&json).unwrap()))
+    }
+
+    pub fn images(&self, tenant_id: String) -> Option<Images> {
+        // doc: https://www.conoha.jp/docs/compute-get_images_list.php
+        let tenant_id_for_url = String::from(tenant_id);
+        let text_result = self
+            .basic_request(
+                HTTPMethod::GET,
+                format!(
+                    "https://compute.tyo1.conoha.io/v2/{}/images",
+                    tenant_id_for_url
+                )
+                .as_str(),
+            )
+            .send();
+        let opt_string = text_result.unwrap().text().ok();
+        opt_string.and_then(|json| Some::<Images>(serde_json::from_str(&json).unwrap()))
+    }
+
+    pub fn create_server(&self, tenant_id: &String, flavor: &Flavor, image: &Image) -> bool {
+        // https://www.conoha.jp/docs/compute-create_vm.php
+        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers", tenant_id);
+        let url = url.as_str();
+
+        let request = self.basic_request(HTTPMethod::POST, url);
+        let result = request
+            .body(format!(
+                "{{\"server\": {{ \"imageRef\": \"{}\", \"flavorRef\": \"{}\" }}  }}",
+                image.id, flavor.id
+            ))
+            .send();
+        match result {
+            Ok(response) => response.status().is_success(),
+            Err(e) => {
+                eprintln!("{}", e);
+                false
+            }
+        }
     }
 
     pub fn boot(&self, server: &Server) -> bool {
