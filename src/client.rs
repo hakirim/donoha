@@ -234,6 +234,17 @@ impl<'a> ServersController<'a> {
         self.api_client.servers(self.tenant_id)
     }
 
+    pub fn create(&self, flavor: &Flavor, image: &Image) -> Result<(), DonohaError> {
+        let succeeded = self
+            .api_client
+            .create_server(&self.tenant_id, flavor, image);
+        if succeeded {
+            Ok(())
+        } else {
+            Err(DonohaError)
+        }
+    }
+
     fn shutdown(self, server: Server) -> Result<(), DonohaError> {
         let succeeded = self.api_client.shutdown(&server);
         if succeeded {
