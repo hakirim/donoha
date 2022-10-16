@@ -1,6 +1,8 @@
 use crate::types::{Flavor, Flavors, Image, Images, Server, Servers};
 use reqwest;
 use reqwest::blocking::RequestBuilder;
+use std::error;
+use std::fmt;
 
 /// Conoha API を利用するための Token request
 pub struct APITokenRequest {
@@ -219,5 +221,51 @@ impl<'a> APIClient<'a> {
                 false
             }
         }
+    }
+}
+
+struct ServersController<'a> {
+    api_client: APIClient<'a>,
+    tenant_id: String,
+}
+
+impl<'a> ServersController<'a> {
+    fn list(self) -> Option<Servers> {
+        self.api_client.servers(self.tenant_id)
+    }
+
+    fn shutdown(self, server: Server) -> Result<(), DonohaError> {
+        let succeeded = self.api_client.shutdown(&server);
+        if succeeded {
+            Ok(())
+        } else {
+            Err(DonohaError)
+        }
+    }
+
+    fn delete(self, server: Server) -> Result<(), DonohaError> {
+        let succeeded = self.api_client.delete(&server);
+        if succeeded {
+            Ok(())
+        } else {
+            Err(DonohaError)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DonohaError;
+
+impl fmt::Display for DonohaError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DonohaError")
+    }
+}
+
+impl error::Error for DonohaError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        // Generic error, underlying cause isn't tracked.
+        // 基本となるエラー、原因は記録されていない。
+        None
     }
 }
