@@ -164,25 +164,6 @@ impl<'a> APIClient<'a> {
         }
     }
 
-    pub fn shutdown(&self, server: &Server) -> bool {
-        // doc: https://www.conoha.jp/docs/compute-stop_cleanly_vm.php
-        let url = format!(
-            "https://compute.tyo1.conoha.io/v2/{}/servers/{}/action",
-            server.tenant_id, server.id
-        );
-        let url = url.as_str();
-
-        let request = self.basic_request(HTTPMethod::POST, url);
-        let result = request.body("{\"os-stop\": null}").send();
-        match result {
-            Ok(response) => response.status().is_success(),
-            Err(e) => {
-                eprintln!("{}", e);
-                false
-            }
-        }
-    }
-
     pub fn delete(&self, server: &Server) -> bool {
         // doc: https://www.conoha.jp/docs/compute-delete_vm.php
         let url = format!(
@@ -242,8 +223,23 @@ impl<'a> ServersController<'a> {
         }
     }
 
-    fn shutdown(self, server: Server) -> Result<(), DonohaError> {
-        let succeeded = self.api_client.shutdown(&server);
+    pub fn shutdown(self, server: Server) -> Result<(), DonohaError> {
+        // doc: https://www.conoha.jp/docs/compute-stop_cleanly_vm.php
+        let url = format!(
+            "https://compute.tyo1.conoha.io/v2/{}/servers/{}/action",
+            server.tenant_id, server.id
+        );
+        let url = url.as_str();
+
+        let request = self.api_client.basic_request(HTTPMethod::POST, url);
+        let result = request.body("{\"os-stop\": null}").send();
+        let succeeded = match result {
+            Ok(response) => response.status().is_success(),
+            Err(e) => {
+                eprintln!("{}", e);
+                false
+            }
+        };
         if succeeded {
             Ok(())
         } else {
