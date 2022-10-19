@@ -145,27 +145,6 @@ impl<'a> APIClient<'a> {
         opt_string.and_then(|json| Some::<Images>(serde_json::from_str(&json).unwrap()))
     }
 
-    pub fn create_server(&self, tenant_id: &String, flavor: &Flavor, image: &Image) -> bool {
-        // https://www.conoha.jp/docs/compute-create_vm.php
-        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers", tenant_id);
-        let url = url.as_str();
-
-        let request = self.basic_request(HTTPMethod::POST, url);
-        let result = request
-            .body(format!(
-                "{{\"server\": {{ \"imageRef\": \"{}\", \"flavorRef\": \"{}\" }}  }}",
-                image.id, flavor.id
-            ))
-            .send();
-        match result {
-            Ok(response) => response.status().is_success(),
-            Err(e) => {
-                eprintln!("{}", e);
-                false
-            }
-        }
-    }
-
     pub fn boot(&self, server: &Server) -> bool {
         // doc:  https://www.conoha.jp/docs/compute-power_on_vm.php
         let url = format!(
@@ -235,9 +214,27 @@ impl<'a> ServersController<'a> {
     }
 
     pub fn create(&self, flavor: &Flavor, image: &Image) -> Result<(), DonohaError> {
-        let succeeded = self
-            .api_client
-            .create_server(&self.tenant_id, flavor, image);
+        // https://www.conoha.jp/docs/compute-create_vm.php
+        let url = format!(
+            "https://compute.tyo1.conoha.io/v2/{}/servers",
+            self.tenant_id
+        );
+        let url = url.as_str();
+
+        let request = self.api_client.basic_request(HTTPMethod::POST, url);
+        let result = request
+            .body(format!(
+                "{{\"server\": {{ \"imageRef\": \"{}\", \"flavorRef\": \"{}\" }}  }}",
+                image.id, flavor.id
+            ))
+            .send();
+        let succeeded = match result {
+            Ok(response) => response.status().is_success(),
+            Err(e) => {
+                eprintln!("{}", e);
+                false
+            }
+        };
         if succeeded {
             Ok(())
         } else {
