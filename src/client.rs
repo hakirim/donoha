@@ -1,6 +1,8 @@
 use crate::types::{Flavor, Flavors, Image, Images, Server, Servers};
 use reqwest;
 use reqwest::blocking::RequestBuilder;
+use std::error;
+use std::fmt;
 
 /// Conoha API を利用するための Token request
 pub struct APITokenRequest {
@@ -143,27 +145,6 @@ impl<'a> APIClient<'a> {
         opt_string.and_then(|json| Some::<Images>(serde_json::from_str(&json).unwrap()))
     }
 
-    pub fn create_server(&self, tenant_id: &String, flavor: &Flavor, image: &Image) -> bool {
-        // https://www.conoha.jp/docs/compute-create_vm.php
-        let url = format!("https://compute.tyo1.conoha.io/v2/{}/servers", tenant_id);
-        let url = url.as_str();
-
-        let request = self.basic_request(HTTPMethod::POST, url);
-        let result = request
-            .body(format!(
-                "{{\"server\": {{ \"imageRef\": \"{}\", \"flavorRef\": \"{}\" }}  }}",
-                image.id, flavor.id
-            ))
-            .send();
-        match result {
-            Ok(response) => response.status().is_success(),
-            Err(e) => {
-                eprintln!("{}", e);
-                false
-            }
-        }
-    }
-
     pub fn boot(&self, server: &Server) -> bool {
         // doc:  https://www.conoha.jp/docs/compute-power_on_vm.php
         let url = format!(
@@ -174,25 +155,6 @@ impl<'a> APIClient<'a> {
 
         let request = self.basic_request(HTTPMethod::POST, url);
         let result = request.body("{\"os-start\": null}").send();
-        match result {
-            Ok(response) => response.status().is_success(),
-            Err(e) => {
-                eprintln!("{}", e);
-                false
-            }
-        }
-    }
-
-    pub fn shutdown(&self, server: &Server) -> bool {
-        // doc: https://www.conoha.jp/docs/compute-stop_cleanly_vm.php
-        let url = format!(
-            "https://compute.tyo1.conoha.io/v2/{}/servers/{}/action",
-            server.tenant_id, server.id
-        );
-        let url = url.as_str();
-
-        let request = self.basic_request(HTTPMethod::POST, url);
-        let result = request.body("{\"os-stop\": null}").send();
         match result {
             Ok(response) => response.status().is_success(),
             Err(e) => {
@@ -219,5 +181,95 @@ impl<'a> APIClient<'a> {
                 false
             }
         }
+    }
+}
+
+struct ServersController<'a> {
+    api_client: APIClient<'a>,
+    tenant_id: String,
+}
+
+impl<'a> ServersController<'a> {
+    fn list(self) -> Option<Servers> {
+        self.api_client.servers(self.tenant_id)
+    }
+
+    pub fn create(&self, flavor: &Flavor, image: &Image) -> Result<(), DonohaError> {
+        // https://www.conoha.jp/docs/compute-create_vm.php
+        let url = format!(
+            "https://compute.tyo1.conoha.io/v2/{}/servers",
+            self.tenant_id
+        );
+        let url = url.as_str();
+
+        let request = self.api_client.basic_request(HTTPMethod::POST, url);
+        let result = request
+            .body(format!(
+                "{{\"server\": {{ \"imageRef\": \"{}\", \"flavorRef\": \"{}\" }}  }}",
+                image.id, flavor.id
+            ))
+            .send();
+        let succeeded = match result {
+            Ok(response) => response.status().is_success(),
+            Err(e) => {
+                eprintln!("{}", e);
+                false
+            }
+        };
+        if succeeded {
+            Ok(())
+        } else {
+            Err(DonohaError)
+        }
+    }
+
+    pub fn shutdown(self, server: Server) -> Result<(), DonohaError> {
+        // doc: https://www.conoha.jp/docs/compute-stop_cleanly_vm.php
+        let url = format!(
+            "https://compute.tyo1.conoha.io/v2/{}/servers/{}/action",
+            server.tenant_id, server.id
+        );
+        let url = url.as_str();
+
+        let request = self.api_client.basic_request(HTTPMethod::POST, url);
+        let result = request.body("{\"os-stop\": null}").send();
+        let succeeded = match result {
+            Ok(response) => response.status().is_success(),
+            Err(e) => {
+                eprintln!("{}", e);
+                false
+            }
+        };
+        if succeeded {
+            Ok(())
+        } else {
+            Err(DonohaError)
+        }
+    }
+
+    fn delete(self, server: Server) -> Result<(), DonohaError> {
+        let succeeded = self.api_client.delete(&server);
+        if succeeded {
+            Ok(())
+        } else {
+            Err(DonohaError)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DonohaError;
+
+impl fmt::Display for DonohaError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "DonohaError")
+    }
+}
+
+impl error::Error for DonohaError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        // Generic error, underlying cause isn't tracked.
+        // 基本となるエラー、原因は記録されていない。
+        None
     }
 }
